@@ -51,6 +51,8 @@ class PrintableProblem(InstrumentedProblem):
 
 def run_search(problem, search_function, parameter=None):
 
+    print("Problem is: ")
+    print(problem)
     start = timer()
     ip = PrintableProblem(problem)
     if parameter is not None:
@@ -89,6 +91,8 @@ def main(p_choices, s_choices):
 
     problems = [PROBLEMS[i-1] for i in map(int, p_choices)]
     searches = [SEARCHES[i-1] for i in map(int, s_choices)]
+
+    print(problems)
 
     for pname, p in problems:
 

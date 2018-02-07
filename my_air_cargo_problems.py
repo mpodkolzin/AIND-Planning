@@ -13,7 +13,7 @@ from functools import lru_cache
 
 
 class AirCargoProblem(Problem):
-    def __init__(self, cargos, planes, airports, initial: FluentState, goal: list):
+    def __init__(self, cargos, planes, airports, initial: FluentState, goal: list) -> None:
         """
 
         :param cargos: list of str
@@ -61,6 +61,18 @@ class AirCargoProblem(Problem):
             """
             loads = []
             # TODO create all load ground actions from the domain Load action
+            for cargo in self.cargos:
+                for plane in self.planes:
+                    for airport in self.airports:
+                        precond_pos = [expr('At({}, {})'.format(cargo, airport)),
+                                       expr('At({}, {})'.format(plane, airport)),]
+                        precond_neg = []
+                        effect_add = [expr('In({}, {})'.format(cargo, plane))]
+                        effect_rem = [expr('At({}, {})'.format(cargo, airport))]
+                        load_action = Action(expr('Load({}, {}, {})'.format(cargo, plane, airport)),
+                                            [precond_pos, precond_neg], [effect_add, effect_rem])
+                        loads.append(load_action)
+            print("loads = {}".format(loads))
             return loads
 
         def unload_actions():
@@ -70,6 +82,17 @@ class AirCargoProblem(Problem):
             """
             unloads = []
             # TODO create all Unload ground actions from the domain Unload action
+            for cargo in self.cargos:
+                for plane in self.planes:
+                    for airport in self.airports:
+                        precond_pos = [expr('In({}, {})'.format(cargo, plane)),
+                                       expr('At({}, {})'.format(plane, airport)),]
+                        precond_neg = []
+                        effect_add = [expr('At({}, {})'.format(cargo, airport))]
+                        effect_rem = [expr('In({}, {})'.format(cargo, plane))]
+                        unload_action = Action(expr('Unload({}, {}, {})'.format(cargo, plane, airport)),
+                                            [precond_pos, precond_neg], [effect_add, effect_rem])
+                        unloads.append(unload_action)
             return unloads
 
         def fly_actions():
@@ -104,7 +127,15 @@ class AirCargoProblem(Problem):
         :return: list of Action objects
         """
         # TODO implement
-        possible_actions = []
+        possible_actions : list = []
+        current_state = decode_state(state, self.state_map)
+        for action in self.actions_list:
+            meet_precond_pos = set(action.precond_pos).issubset(current_state.pos)
+            meet_precond_neg = set(action.precond_neg).issubset(current_state.neg)
+            # If current state entails the action's preconditions, the acction is possible
+            if meet_precond_pos and meet_precond_neg:
+                possible_actions.append(action)
+
         return possible_actions
 
     def result(self, state: str, action: Action):
@@ -118,6 +149,12 @@ class AirCargoProblem(Problem):
         """
         # TODO implement
         new_state = FluentState([], [])
+        new_state = FluentState([], [])
+        old_state = decode_state(state, self.state_map)
+        # Get the positive fluents
+        new_state.pos = list(set(old_state.pos).union(action.effect_add) - set(action.effect_rem))
+        # Get the negative fluents
+        new_state.neg = list(set(old_state.neg).union(action.effect_rem) - set(action.effect_add))
         return encode_state(new_state, self.state_map)
 
     def goal_test(self, state: str) -> bool:
@@ -159,6 +196,30 @@ class AirCargoProblem(Problem):
         """
         # TODO implement (see Russell-Norvig Ed-3 10.2.3  or Russell-Norvig Ed-2 11.2)
         count = 0
+        # Decode the current state
+        current_state = decode_state(node.state, self.state_map)
+        # Remove goals already achieved
+        goals = set(self.goal) - set(current_state.pos)
+        # Get all the possible actions
+        possible_acctions = self.actions_list
+        while len(possible_acctions) > 0 and len(goals) > 0:
+            # Get the achievable goals for each action
+            actions_goals_achieved = [(action, goals.intersection(action.effect_add)) for action in possible_acctions]
+            # Get just the actions that achieve at least one remaining goal
+            actions_goals_achieved = [x for x in actions_goals_achieved if len(x[1]) > 0]
+            # If no action achieve the goal, it means the goal is not achievable
+            if not actions_goals_achieved:
+                return float("inf")
+            # Sort the actions by the number of goals it achieves (descending)
+            actions_goals_achieved.sort(key = lambda x :len(x[1]), reverse = True )
+            # Take the action that achives more goals and substract them from the remianing goals
+            best_action, achivements =  actions_goals_achieved[0]
+            goals = goals - achivements
+            # Update the list of possible action in order to continue looking 
+            # for the action achieving more goals given the new list of remaining goals
+            possible_acctions = [x[0] for x in actions_goals_achieved]
+            possible_acctions.remove(best_action)
+            count +=1
         return count
 
 
