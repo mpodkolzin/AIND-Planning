@@ -306,7 +306,6 @@ class PlanningGraph():
         #   set iff all prerequisite literals for the action hold in S0.  This can be accomplished by testing
         #   to see if a proposed PgNode_a has prenodes that are a subset of the previous S level.  Once an
         #   action node is added, it MUST be connected to the S node instances in the appropriate s_level set.
-        prev_state = self.s_levels[level]
 
         # Create new action level
         self.a_levels.append(set())
@@ -314,16 +313,16 @@ class PlanningGraph():
         # Iterate through all possible actions
         for action in self.all_actions: # self.all_actions includes "No-op" actions
             # Create a node for the action
-            action_node = PgNode_a(action)
+            a_node = PgNode_a(action)
             # Check if all action's preconditions are in previous state level
-            if action_node.prenodes.issubset(prev_state):
-                # Add action node to the new action level
-                self.a_levels[level].add(action_node)
-                # Connect parents and childrens
-                for literal in prev_state:
-                    if literal in action_node.prenodes:
-                        literal.children.add(action_node)
-                        action_node.parents.add(literal)
+            if a_node.prenodes.issubset(self.s_levels[level]):
+                # Add node to the new level
+                self.a_levels[level].add(a_node)
+
+                for literal in self.s_levels[level]:
+                    if literal in a_node.prenodes:
+                        literal.children.add(a_node)
+                        a_node.parents.add(literal)
 
     def add_literal_level(self, level):
         """ add an S (literal) level to the Planning Graph
@@ -346,24 +345,24 @@ class PlanningGraph():
         prev_actions = self.a_levels[level-1]
         # Create a new state leve
         self.s_levels.append(set())
-        # Dictionary to save the literals reference added to new state level
-        literals = dict()
+
+        s_nodes = dict()
         # Iterate through all actions in previous action level
-        for action_node in prev_actions:
+        for a_node in prev_actions:
             # Iterate through all effects produced by the action
-            for effect in action_node.effnodes:
+            for effect in a_node.effnodes:
                 # Create a new state node with the effect produced
-                literal = PgNode_s(effect.symbol, effect.is_pos)
+                s_node = PgNode_s(effect.symbol, effect.is_pos)
                 # Check if literal already exists in new state level, if so override it with added reference
-                if effect in literals:
-                    literal = literals[effect]
+                if effect in s_nodes:
+                    s_node = s_nodes[effect]
                 #If literal does not already exist, uses the previously created and add it to the new state level
                 else:
-                    literals[effect] = literal
-                    self.s_levels[level].add(literal)
+                    s_nodes[effect] = s_node
+                    self.s_levels[level].add(s_node)
                 # Connect with action node (parents and children)
-                literal.parents.add(action_node)
-                action_node.children.add(literal)
+                s_node.parents.add(a_node)
+                a_node.children.add(s_node)
 
     def update_a_mutex(self, nodeset):
         """ Determine and update sibling mutual exclusion for A-level nodes
@@ -422,17 +421,16 @@ class PlanningGraph():
         :return: bool
         """
         # TODO test for Inconsistent Effects between nodes
-        action1 = node_a1.action
-        action2 = node_a2.action
+        a1 = node_a1.action
+        a2 = node_a2.action
 
-        # Check if any effect in action 1 is negated by some effect in action 2
-        for effect in action1.effect_add:
-            if effect in action2.effect_rem:
+        for effect in a1.effect_add:
+            if effect in a2.effect_rem:
                 return True
 
         # Check if any effect in action 2 is negated by some effect in action 1
-        for effect in action2.effect_add:
-            if effect in action1.effect_rem:
+        for effect in a2.effect_add:
+            if effect in a1.effect_rem:
                 return True
         return False
 
@@ -451,24 +449,24 @@ class PlanningGraph():
         :return: bool
         """
         # TODO test for Interference between nodes
-        action1 = node_a1.action
-        action2 = node_a2.action
+        a1 = node_a1.action
+        a2 = node_a2.action
 
         # Check if any positive precond in action 1 is negated by some effect in action 2
-        for precond in action1.precond_pos:
-            if precond in action2.effect_rem:
+        for precond in a1.precond_pos:
+            if precond in a2.effect_rem:
                 return True
         # Check if any negative precond in action 1 is negated by some effect in action 2
-        for precond in action1.precond_neg:
-            if precond in action2.effect_add:
+        for precond in a1.precond_neg:
+            if precond in a2.effect_add:
                 return True
         # Check if any positive precond in action 2 is negated by some effect in action 1
-        for precond in action2.precond_pos:
-            if precond in action1.effect_rem:
+        for precond in a2.precond_pos:
+            if precond in a1.effect_rem:
                 return True
         # Check if any positive precond in action 2 is negated by some effect in action 1
-        for precond in action2.precond_neg:
-            if precond in action1.effect_add:
+        for precond in a2.precond_neg:
+            if precond in a1.effect_add:
                 return True
         return False
 
@@ -523,7 +521,9 @@ class PlanningGraph():
         :return: bool
         """
         # TODO test for negation between nodes
-        return node_s1.symbol == node_s2.symbol and node_s1.is_pos != node_s2.is_pos
+        res = (node_s1.symbol == node_s2.symbol) and (node_s1.is_pos != node_s2.is_pos)
+
+        return res
 
     def inconsistent_support_mutex(self, node_s1: PgNode_s, node_s2: PgNode_s):
         """
@@ -559,7 +559,7 @@ class PlanningGraph():
         # for each goal in the problem, determine the level cost, then add them together
         goals = [PgNode_s(g,True) for g in self.problem.goal]
         i = 0
-        # look up goals through all state levels
+        # search for goads in all the state levels
         while i < len(self.s_levels) and len(goals) > 0:
             state_level = self.s_levels[i]
             for goal in [x for x in goals]:
@@ -568,5 +568,4 @@ class PlanningGraph():
                     level_sum += i
                     goals.remove(goal)
             i += 1
-        return level_sum
         return level_sum
